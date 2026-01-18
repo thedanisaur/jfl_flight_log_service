@@ -31,7 +31,15 @@ func main() {
 	} else {
 		defer database.Close()
 	}
-	security.GenerateSigningKey()
+
+	// ==========================================
+	// Load Auth Keys
+	// ==========================================
+	public_key, err := security.LoadPublicKey("secrets/public_signing_key.pem")
+	if err != nil {
+		log.Printf("Error opening public signing key, cannot continue: %s\n", err.Error())
+		return
+	}
 
 	// ==========================================
 	// Start Workers here
@@ -72,12 +80,12 @@ func main() {
 	// ==========================================
 	// JWT Authentication
 	// ==========================================
-	app.Get("/flight-logs/:user_id", auth.AuthorizationMiddleware(config), handlers.GetFlightlogs(config))
-	app.Get("/flight-logs/:user_id/:id", auth.AuthorizationMiddleware(config), handlers.GetFlightlog(config))
+	app.Get("/flight-logs/:user_id", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlogs(config))
+	app.Get("/flight-logs/:user_id/:id", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlog(config))
 
-	app.Post("/flight-logs/:id", auth.AuthorizationMiddleware(config), handlers.CreateFlightlog(config))
+	app.Post("/flight-logs/:id", auth.AuthorizationMiddleware(config, public_key), handlers.CreateFlightlog(config))
 
-	app.Put("/flight-logs/:id", auth.AuthorizationMiddleware(config), handlers.UpdateFlightlog(config))
+	app.Put("/flight-logs/:id", auth.AuthorizationMiddleware(config, public_key), handlers.UpdateFlightlog(config))
 
 	// ==========================================
 	// Start Service

@@ -11,9 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thedanisaur/jfl_platform/types"
-
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/thedanisaur/jfl_platform/types"
 )
 
 var lock = &sync.Mutex{}
