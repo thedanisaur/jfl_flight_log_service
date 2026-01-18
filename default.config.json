@@ -1,0 +1,50 @@
+{
+    "database": {
+        "config_path": "./secrets/db.env"
+    },
+    "app": {
+        "login_expiration_ms": 120000,
+        "max_sessions": 2,
+        "host": {
+            "issuer": "flight-log-dev.jfl.com",
+            "use_tls": true,
+            "cert_path": "./secrets/cert.crt",
+            "key_path": "./secrets/key.key",
+            "port": 8082
+        },
+        "cors": {
+            "allow_credentials": true,
+            "allow_headers": [
+                "Accept"
+                , "Accept-Encoding"
+                , "Accept-Language"
+                , "Access-Control-Request-Headers"
+                , "Access-Control-Request-Method"
+                , "Connection"
+                , "Host"
+                , "Origin"
+                , "Referer"
+                , "Sec-Fetch-Dest"
+                , "Sec-Fetch-Mode"
+                , "Sec-Fetch-Site"
+                , "User-Agent"
+                , "Content-Type"
+                , "Content-Length"
+                , "Authorization"
+                , "Username"
+            ],
+            "allow_origins": [
+                "https://127.0.0.1:8080",
+                "https://localhost:8080",
+                "https://127.0.0.1:8081",
+                "https://localhost:8081"
+            ]
+        },
+        "limiter": {
+            "max_requests": 5,
+            "expiration": 300000,
+            "limiter_sliding_middleware": true,
+            "skip_successful_requests": true
+        }
+    }
+}
