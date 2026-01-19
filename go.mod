@@ -1,4 +1,4 @@
-module user_service
+module flight_log_service
 
 go 1.21.0
 

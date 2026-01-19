@@ -11,11 +11,11 @@ import (
 
 func CreateAircrew(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		txid := uuid.New()
+		txid := c.Locals("transaction_id").(uuid.UUID)
 		log.Printf("%s | %s\n", util.GetFunctionName(CreateAircrew), txid.String())
 		response := fiber.Map{
 			"txid": txid.String(),
 		}
-		return c.Status(fiber.StatusOK).JSON(response)
+		return c.Status(fiber.StatusMethodNotAllowed).JSON(response)
 	}
 }
