@@ -54,10 +54,10 @@ func CreateFlightlog(config types.Config) fiber.Handler {
 	}
 }
 
-func GetFlightlog(config types.Config) fiber.Handler {
+func GetAllFlightlogs(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		txid := c.Locals("transaction_id").(uuid.UUID)
-		log.Printf("%s | %s\n", util.GetFunctionName(CreateFlightlog), txid.String())
+		log.Printf("%s | %s\n", util.GetFunctionName(GetAllFlightlogs), txid.String())
 		response := fiber.Map{
 			"txid": txid.String(),
 		}
@@ -65,10 +65,52 @@ func GetFlightlog(config types.Config) fiber.Handler {
 	}
 }
 
+func GetFlightlog(config types.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		txid := c.Locals("transaction_id").(uuid.UUID)
+		log.Printf("%s | %s\n", util.GetFunctionName(GetFlightlog), txid.String())
+
+		user_id, err := uuid.Parse(c.Params("user_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
+		}
+		flight_log_id, err := uuid.Parse(c.Params("flight_log_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid flight log")
+		}
+
+		flight_log, err := db.GetFlightlog(txid, user_id, flight_log_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		flight_log.Missions, err = db.GetMissions(txid, flight_log_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		flight_log.Aircrew, err = db.GetAirCrews(txid, flight_log_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		flight_log.Comments, err = db.GetFlightLogComments(txid, flight_log_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		// response := fiber.Map{
+		// 	"txid": txid.String(),
+		// }
+
+		return c.Status(fiber.StatusOK).JSON(flight_log)
+	}
+}
+
 func GetFlightlogs(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		txid := c.Locals("transaction_id").(uuid.UUID)
-		log.Printf("%s | %s\n", util.GetFunctionName(CreateFlightlog), txid.String())
+		log.Printf("%s | %s\n", util.GetFunctionName(GetFlightlogs), txid.String())
 		response := fiber.Map{
 			"txid": txid.String(),
 		}
@@ -79,7 +121,7 @@ func GetFlightlogs(config types.Config) fiber.Handler {
 func UpdateFlightlog(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		txid := c.Locals("transaction_id").(uuid.UUID)
-		log.Printf("%s | %s\n", util.GetFunctionName(CreateFlightlog), txid.String())
+		log.Printf("%s | %s\n", util.GetFunctionName(UpdateFlightlog), txid.String())
 		response := fiber.Map{
 			"txid": txid.String(),
 		}

@@ -81,12 +81,13 @@ func main() {
 	// ==========================================
 	// JWT Authentication
 	// ==========================================
+	app.Get("/flight-logs/", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlog(config))
 	app.Get("/flight-logs/:user_id", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlogs(config))
-	app.Get("/flight-logs/:user_id/:id", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlog(config))
+	app.Get("/flight-logs/:user_id/:flight_log_id", auth.AuthorizationMiddleware(config, public_key), handlers.GetFlightlog(config))
 
 	app.Post("/flight-logs/:user_id", auth.AuthorizationMiddleware(config, public_key), handlers.CreateFlightlog(config))
 
-	app.Put("/flight-logs/:user_id/:id", auth.AuthorizationMiddleware(config, public_key), handlers.UpdateFlightlog(config))
+	app.Put("/flight-logs/:user_id/:flight_log_id", auth.AuthorizationMiddleware(config, public_key), handlers.UpdateFlightlog(config))
 
 	// ==========================================
 	// Start Service
