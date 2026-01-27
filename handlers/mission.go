@@ -12,7 +12,7 @@ import (
 func CreateMission(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		txid := c.Locals("transaction_id").(uuid.UUID)
-		log.Printf("%s | %s\n", util.GetFunctionName(CreateMission), txid.String())
+		log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(CreateMission))
 		response := fiber.Map{
 			"txid": txid.String(),
 		}
