@@ -24,11 +24,6 @@ func CreateFlightlogComment(config types.Config) fiber.Handler {
 		}
 		/* Get the target user/flight log info */
 		// TODO [drd] should we make sure we're commenting on a flight log owned by the target user or is any uuid a valid address?
-		_, err = uuid.Parse(c.Params("user_id"))
-		if err != nil {
-			log.Printf("Failed to parse target user id: %s\n", c.Params("user_id"))
-			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
-		}
 		flight_log_id, err := uuid.Parse(c.Params("flight_log_id"))
 		if err != nil {
 			log.Printf("Failed to parse flight log id: %s\n", c.Params("flight_log_id"))
@@ -38,12 +33,11 @@ func CreateFlightlogComment(config types.Config) fiber.Handler {
 			log.Printf("Attempted write comment to wrong flight log. URL ID: %s. Flight Log Comment - Flight Log ID: %s\n", flight_log_id, flight_log_comment.FlightLogID)
 			return c.Status(fiber.StatusBadRequest).SendString("malformed flight log comment")
 		}
-
-		/* Get the requesting user's id */
-		request_user_id := c.Locals("user_id").(uuid.UUID)
+		/* Get the requesting user */
+		request_user := c.Locals("user_claims").(types.UserClaims)
 
 		/* Now start inserting the flight log comment */
-		comment_id, err := db.InsertFlightLogComment(txid, request_user_id, flight_log_comment)
+		comment_id, err := db.InsertFlightLogComment(txid, request_user.UserID, flight_log_comment)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}

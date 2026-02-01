@@ -1,9 +1,11 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/thedanisaur/jfl_platform/types"
 	"github.com/thedanisaur/jfl_platform/util"
@@ -20,7 +22,7 @@ func GetAirCrews(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogAirc
 	}
 	query := `
 		SELECT BIN_TO_UUID(id) AS id
-			, flight_log_id
+			, BIN_TO_UUID(flight_log_id) AS flight_log_id
 			, user_id
 			, flying_origin
 			, flight_auth_code
@@ -94,9 +96,9 @@ func GetFlightLogComments(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.Flig
 	}
 	query := `
 		SELECT BIN_TO_UUID(id) AS id
-			, flight_log_id
+			, BIN_TO_UUID(flight_log_id) AS flight_log_id
 			, user_id
-			, role_id
+			, role_name
 			, comment
 			, created_on
 			, updated_on
@@ -117,7 +119,7 @@ func GetFlightLogComments(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.Flig
 			&comment.ID,
 			&comment.FlightLogID,
 			&comment.UserID,
-			&comment.RoleID,
+			&comment.RoleName,
 			&comment.Comment,
 			&comment.CreatedOn,
 			&comment.UpdatedOn,
@@ -140,8 +142,7 @@ func GetFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (t
 	}
 	query := `
 		SELECT BIN_TO_UUID(id) AS id
-			, user_id
-			, unit_id
+			, BIN_TO_UUID(user_id) AS user_id
 			, mds
 			, flight_log_date
 			, serial_number
@@ -167,7 +168,6 @@ func GetFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (t
 	err = row.Scan(
 		&flight_log_dto.ID,
 		&flight_log_dto.UserID,
-		&flight_log_dto.UnitID,
 		&flight_log_dto.MDS,
 		&flight_log_dto.FlightLogDate,
 		&flight_log_dto.SerialNumber,
@@ -202,8 +202,7 @@ func GetFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, err
 	}
 	query := `
 		SELECT BIN_TO_UUID(id) AS id
-			, user_id
-			, unit_id
+			, BIN_TO_UUID(user_id) AS user_id
 			, mds
 			, flight_log_date
 			, serial_number
@@ -237,7 +236,6 @@ func GetFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, err
 		err := rows.Scan(
 			&flight_log.ID,
 			&flight_log.UserID,
-			&flight_log.UnitID,
 			&flight_log.MDS,
 			&flight_log.FlightLogDate,
 			&flight_log.SerialNumber,
@@ -265,17 +263,16 @@ func GetFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, err
 	return flight_logs, nil
 }
 
-func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, error) {
+func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID, where_clause string, where_args []interface{}) ([]types.FlightLogDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetFlightlogsAll))
 	database, err := GetInstance()
 	if err != nil {
 		log.Printf("Failed to connect to DB\n%s\n", err.Error())
 		return nil, errors.New("failed to connect to DB")
 	}
-	query := `
-		SELECT BIN_TO_UUID(id) AS id
+	flight_log_query := `
+		SELECT flight_log_id
 			, user_id
-			, unit_id
 			, mds
 			, flight_log_date
 			, serial_number
@@ -293,9 +290,16 @@ func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, 
 			, training_officer_signature_id
 			, type
 			, remarks
-		FROM flight_logs
+		FROM flight_logs_vw
 	`
-	rows, err := database.Query(query)
+	flight_log_query_str := strings.Join([]string{flight_log_query, "WHERE", where_clause}, " ")
+
+	/* TODO [drd] remove this logging */
+	log.Printf("Query string: %s\n", flight_log_query_str)
+	b, _ := json.Marshal(where_args)
+	log.Printf("Arguments: %s\n", b)
+
+	rows, err := database.Query(flight_log_query_str, where_args...)
 	if err != nil {
 		log.Printf("Failed to retrieve flight logs for user: %s\n%s\n", user_id, err.Error())
 		return nil, errors.New("failed to retrieve flight logs")
@@ -308,7 +312,6 @@ func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, 
 		err := rows.Scan(
 			&flight_log.ID,
 			&flight_log.UserID,
-			&flight_log.UnitID,
 			&flight_log.MDS,
 			&flight_log.FlightLogDate,
 			&flight_log.SerialNumber,
@@ -345,7 +348,7 @@ func GetMissions(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogMiss
 	}
 	query := `
 		SELECT BIN_TO_UUID(id) AS id
-			, flight_log_id
+			, BIN_TO_UUID(flight_log_id) AS flight_log_id
 			, mission_number
 			, mission_symbol
 			, mission_from
@@ -396,8 +399,8 @@ func GetMissions(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogMiss
 	return missions, nil
 }
 
-func InsertAircrew(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertAircrew))
+func InsertAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertAircrews))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
 	database, err := GetInstance()
 	if err != nil {
@@ -503,7 +506,6 @@ func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types
 		(
 			id
 			, user_id
-			, unit_id
 			, mds
 			, flight_log_date
 			, serial_number
@@ -526,7 +528,6 @@ func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types
 		(
 			UUID_TO_BIN(?), -- id
 			UUID_TO_BIN(?), -- user_id
-			UUID_TO_BIN(?), -- unit_id
 			?, -- mds
 			?, -- flight_log_date
 			?, -- serial_number
@@ -551,7 +552,6 @@ func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types
 		query,
 		id,
 		request_user_id,
-		flight_log.UnitID,
 		flight_log.MDS,
 		flight_log.FlightLogDate,
 		flight_log.SerialNumber,
@@ -591,7 +591,7 @@ func InsertFlightLogComment(txid uuid.UUID, request_user_id uuid.UUID, flight_lo
 			id
 			, flight_log_id
 			, user_id
-			, role_id
+			, role_name
 			, comment
 		)
 		VALUES
@@ -599,7 +599,7 @@ func InsertFlightLogComment(txid uuid.UUID, request_user_id uuid.UUID, flight_lo
 			UUID_TO_BIN(?), -- id
 			UUID_TO_BIN(?), -- flight_log_id
 			UUID_TO_BIN(?), -- user_id
-			UUID_TO_BIN(?), -- role_id
+			?, -- role_name
 			? -- comment
 		)
 	`
@@ -609,7 +609,7 @@ func InsertFlightLogComment(txid uuid.UUID, request_user_id uuid.UUID, flight_lo
 		id,
 		flight_log_comment.FlightLogID,
 		request_user_id,
-		flight_log_comment.RoleID,
+		flight_log_comment.RoleName,
 		flight_log_comment.Comment,
 	)
 	if err != nil {
@@ -635,7 +635,7 @@ func InsertFlightLogComments(txid uuid.UUID, request_user_id uuid.UUID, flight_l
 				id
 				, flight_log_id
 				, user_id
-				, role_id
+				, role_name
 				, comment
 			)
 			VALUES
@@ -643,7 +643,7 @@ func InsertFlightLogComments(txid uuid.UUID, request_user_id uuid.UUID, flight_l
 				UUID_TO_BIN(?), -- id
 				UUID_TO_BIN(?), -- flight_log_id
 				UUID_TO_BIN(?), -- user_id
-				UUID_TO_BIN(?), -- role_id
+				?, -- role_name
 				? -- comment
 			)
 		`
@@ -653,7 +653,7 @@ func InsertFlightLogComments(txid uuid.UUID, request_user_id uuid.UUID, flight_l
 			id,
 			flight_log.ID,
 			request_user_id,
-			comment.RoleID,
+			comment.RoleName,
 			comment.Comment,
 		)
 		if err != nil {
@@ -749,7 +749,6 @@ func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, 
 	query := `
 		UPDATE flight_logs
 		SET
-			, unit_id = ?
 			, mds = ?
 			, flight_log_date = ?
 			, serial_number = ?
@@ -774,7 +773,6 @@ func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, 
 	_, err = database.Exec(
 		query,
 		// Update Values
-		flight_log.UnitID,
 		flight_log.MDS,
 		flight_log.FlightLogDate,
 		flight_log.SerialNumber,
