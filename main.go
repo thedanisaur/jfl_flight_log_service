@@ -87,6 +87,7 @@ func main() {
 
 	app.Post("/flight-logs/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.CreateFlightlog(config))
 	app.Post("/flight-logs/:user_id/:flight_log_id/comments", auth.AuthenticationMiddleware(config, public_key), handlers.CreateFlightlogComment(config))
+	app.Post("/templates/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.CreateTemplateFlightlog(config))
 
 	app.Put("/flight-logs/:user_id/:flight_log_id", auth.AuthenticationMiddleware(config, public_key), handlers.UpdateFlightlog(config))
 

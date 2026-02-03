@@ -1,11 +1,9 @@
 package db
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/thedanisaur/jfl_platform/types"
 	"github.com/thedanisaur/jfl_platform/util"
@@ -13,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func GetAirCrews(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogAircrewDTO, error) {
+func GetTemplateAirCrews(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogAircrewDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetAirCrews))
 	database, err := GetInstance()
 	if err != nil {
@@ -87,53 +85,7 @@ func GetAirCrews(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogAirc
 	return aircrews, nil
 }
 
-func GetFlightLogComments(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogCommentDTO, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetFlightLogComments))
-	database, err := GetInstance()
-	if err != nil {
-		log.Printf("Failed to connect to DB\n%s\n", err.Error())
-		return nil, errors.New("failed to connect to DB")
-	}
-	query := `
-		SELECT BIN_TO_UUID(id) AS id
-			, BIN_TO_UUID(flight_log_id) AS flight_log_id
-			, user_id
-			, role_name
-			, comment
-			, created_on
-			, updated_on
-		FROM flight_log_comments
-		WHERE flight_log_id = UUID_TO_BIN(?)
-	`
-	rows, err := database.Query(query, flight_log_id)
-	if err != nil {
-		log.Printf("Failed to retrieve comments for flight log: %s \n%s\n", flight_log_id, err.Error())
-		return nil, fmt.Errorf("failed to retrieve comments for flight log: %s", flight_log_id)
-	}
-	defer rows.Close()
-
-	comments := make([]types.FlightLogCommentDTO, 0)
-	for rows.Next() {
-		var comment types.FlightLogCommentDTO
-		err := rows.Scan(
-			&comment.ID,
-			&comment.FlightLogID,
-			&comment.UserID,
-			&comment.RoleName,
-			&comment.Comment,
-			&comment.CreatedOn,
-			&comment.UpdatedOn,
-		)
-		if err != nil {
-			log.Printf("Failed to parse comment for flight log: %s \n%s\n", flight_log_id, err.Error())
-			return nil, fmt.Errorf("failed to parse comment for flight log: %s", flight_log_id)
-		}
-		comments = append(comments, comment)
-	}
-	return comments, nil
-}
-
-func GetFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (types.FlightLogDTO, error) {
+func GetTemplateFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (types.FlightLogDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetFlightlog))
 	database, err := GetInstance()
 	if err != nil {
@@ -193,7 +145,7 @@ func GetFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (t
 	return flight_log_dto, nil
 }
 
-func GetFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, error) {
+func GetTemplateFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetFlightlogs))
 	database, err := GetInstance()
 	if err != nil {
@@ -263,84 +215,7 @@ func GetFlightlogs(txid uuid.UUID, user_id uuid.UUID) ([]types.FlightLogDTO, err
 	return flight_logs, nil
 }
 
-func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID, where_clause string, where_args []interface{}) ([]types.FlightLogDTO, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetFlightlogsAll))
-	database, err := GetInstance()
-	if err != nil {
-		log.Printf("Failed to connect to DB\n%s\n", err.Error())
-		return nil, errors.New("failed to connect to DB")
-	}
-	flight_log_query := `
-		SELECT BIN_TO_UUID(flight_logs.id) AS "flight_log_id"
-			, BIN_TO_UUID(flight_logs.user_id) AS "user_id"
-			, flight_logs.mds
-			, flight_logs.flight_log_date
-			, flight_logs.serial_number
-			, flight_logs.unit_charged
-			, flight_logs.harm_location
-			, flight_logs.flight_authorization
-			, flight_logs.issuing_unit
-			, flight_logs.is_training_flight
-			, flight_logs.is_training_only
-			, flight_logs.total_flight_decimal_time
-			, flight_logs.scheduler_signature_id
-			, flight_logs.sarm_signature_id
-			, flight_logs.instructor_signature_id
-			, flight_logs.student_signature_id
-			, flight_logs.training_officer_signature_id
-			, flight_logs.type
-			, flight_logs.remarks
-		FROM flight_logs
-	`
-	where_clause = strings.ReplaceAll(where_clause, "?", "UUID_TO_BIN(?)")
-	flight_log_query_str := strings.Join([]string{flight_log_query, "WHERE", where_clause}, " ")
-
-	/* TODO [drd] remove this logging */
-	log.Printf("Query string: %s\n", flight_log_query_str)
-	b, _ := json.Marshal(where_args)
-	log.Printf("Arguments: %s\n", b)
-
-	rows, err := database.Query(flight_log_query_str, where_args...)
-	if err != nil {
-		log.Printf("Failed to retrieve flight logs for user: %s\n%s\n", user_id, err.Error())
-		return nil, errors.New("failed to retrieve flight logs")
-	}
-	defer rows.Close()
-
-	flight_logs := make([]types.FlightLogDTO, 0)
-	for rows.Next() {
-		var flight_log types.FlightLogDTO
-		err := rows.Scan(
-			&flight_log.ID,
-			&flight_log.UserID,
-			&flight_log.MDS,
-			&flight_log.FlightLogDate,
-			&flight_log.SerialNumber,
-			&flight_log.UnitCharged,
-			&flight_log.HarmLocation,
-			&flight_log.FlightAuthorization,
-			&flight_log.IssuingUnit,
-			&flight_log.IsTrainingFlight,
-			&flight_log.IsTrainingOnly,
-			&flight_log.TotalFlightDecimalTime,
-			&flight_log.SchedulerSignatureID,
-			&flight_log.SarmSignatureID,
-			&flight_log.InstructorSignatureID,
-			&flight_log.StudentSignatureID,
-			&flight_log.TrainingOfficerSignatureID,
-			&flight_log.Type,
-			&flight_log.Remarks,
-		)
-		if err != nil {
-			log.Printf("Failed to parse a flight log for user: %s \n%s\n", user_id, err.Error())
-			return nil, fmt.Errorf("failed to parse a flight log for user: %s", user_id)
-		}
-		flight_logs = append(flight_logs, flight_log)
-	}
-	return flight_logs, nil
-}
-
-func GetMissions(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogMissionDTO, error) {
+func GetTemplateMissions(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogMissionDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetMissions))
 	database, err := GetInstance()
 	if err != nil {
@@ -400,8 +275,8 @@ func GetMissions(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogMiss
 	return missions, nil
 }
 
-func InsertAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertAircrews))
+func InsertTemplateAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertTemplateAircrews))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
 	database, err := GetInstance()
 	if err != nil {
@@ -411,7 +286,7 @@ func InsertAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 	ids := []uuid.UUID{}
 	for _, aircrew := range flight_log.Aircrew {
 		query := `
-			INSERT INTO aircrews
+			INSERT INTO template_aircrews
 			(
 				id
 				, flight_log_id
@@ -486,7 +361,7 @@ func InsertAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 			aircrew.AircrewRoleType,
 		)
 		if err != nil {
-			log.Printf("failed aircrew insert\n%s\n", err.Error())
+			log.Printf("failed template aircrew insert\n%s\n", err.Error())
 			return nil, errors.New(err_string)
 		}
 		ids = append(ids, id)
@@ -494,8 +369,8 @@ func InsertAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 	return ids, nil
 }
 
-func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertFlightLog))
+func InsertTemplateFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertTemplateFlightLog))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
 	database, err := GetInstance()
 	if err != nil {
@@ -503,7 +378,7 @@ func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types
 		return uuid.Nil, errors.New(err_string)
 	}
 	query := `
-		INSERT INTO flight_logs
+		INSERT INTO template_flight_logs
 		(
 			id
 			, user_id
@@ -572,102 +447,14 @@ func InsertFlightLog(txid uuid.UUID, request_user_id uuid.UUID, flight_log types
 		flight_log.Remarks,
 	)
 	if err != nil {
-		log.Printf("failed flight log insert\n%s\n", err.Error())
+		log.Printf("failed template flight log insert\n%s\n", err.Error())
 		return uuid.Nil, errors.New(err_string)
 	}
 	return id, nil
 }
 
-func InsertFlightLogComment(txid uuid.UUID, request_user_id uuid.UUID, flight_log_comment types.FlightLogCommentDTO) (uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertFlightLogComment))
-	err_string := fmt.Sprintf("database error: %s\n", txid.String())
-	database, err := GetInstance()
-	if err != nil {
-		log.Printf("failed to connect to database\n%s\n", err.Error())
-		return uuid.Nil, errors.New(err_string)
-	}
-	query := `
-		INSERT INTO flight_log_comments
-		(
-			id
-			, flight_log_id
-			, user_id
-			, role_name
-			, comment
-		)
-		VALUES
-		(
-			UUID_TO_BIN(?), -- id
-			UUID_TO_BIN(?), -- flight_log_id
-			UUID_TO_BIN(?), -- user_id
-			?, -- role_name
-			? -- comment
-		)
-	`
-	id := uuid.New()
-	_, err = database.Exec(
-		query,
-		id,
-		flight_log_comment.FlightLogID,
-		request_user_id,
-		flight_log_comment.RoleName,
-		flight_log_comment.Comment,
-	)
-	if err != nil {
-		log.Printf("failed flight log comment insert\n%s\n", err.Error())
-		return uuid.Nil, errors.New(err_string)
-	}
-	return id, nil
-}
-
-func InsertFlightLogComments(txid uuid.UUID, request_user_id uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertFlightLogComments))
-	err_string := fmt.Sprintf("database error: %s\n", txid.String())
-	database, err := GetInstance()
-	if err != nil {
-		log.Printf("failed to connect to database\n%s\n", err.Error())
-		return nil, errors.New(err_string)
-	}
-	ids := []uuid.UUID{}
-	for _, comment := range flight_log.Comments {
-		query := `
-			INSERT INTO flight_log_comments
-			(
-				id
-				, flight_log_id
-				, user_id
-				, role_name
-				, comment
-			)
-			VALUES
-			(
-				UUID_TO_BIN(?), -- id
-				UUID_TO_BIN(?), -- flight_log_id
-				UUID_TO_BIN(?), -- user_id
-				?, -- role_name
-				? -- comment
-			)
-		`
-		id := uuid.New()
-		_, err = database.Exec(
-			query,
-			id,
-			flight_log.ID,
-			request_user_id,
-			comment.RoleName,
-			comment.Comment,
-		)
-		if err != nil {
-			log.Printf("failed flight log comment insert\n%s\n", err.Error())
-			return nil, errors.New(err_string)
-		}
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
-func InsertMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertMissions))
+func InsertTemplateMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertTemplateMissions))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
 	database, err := GetInstance()
 	if err != nil {
@@ -677,7 +464,7 @@ func InsertMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 	ids := []uuid.UUID{}
 	for _, mission := range flight_log.Missions {
 		query := `
-			INSERT INTO missions
+			INSERT INTO template_missions
 			(
 				id
 				, flight_log_id
@@ -731,7 +518,7 @@ func InsertMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 			mission.Sorties,
 		)
 		if err != nil {
-			log.Printf("failed mission insert\n%s\n", err.Error())
+			log.Printf("failed template mission insert\n%s\n", err.Error())
 			return nil, errors.New(err_string)
 		}
 		ids = append(ids, id)
@@ -739,7 +526,7 @@ func InsertMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 	return ids, nil
 }
 
-func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
+func UpdateTemplateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertFlightLog))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
 	database, err := GetInstance()
