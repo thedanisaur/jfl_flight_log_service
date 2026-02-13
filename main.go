@@ -84,12 +84,18 @@ func main() {
 	app.Get("/flight-logs", auth.AuthenticationMiddleware(config, public_key), handlers.GetFlightlogsAll(config))
 	app.Get("/flight-logs/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.GetFlightlogs(config))
 	app.Get("/flight-logs/:user_id/:flight_log_id", auth.AuthenticationMiddleware(config, public_key), handlers.GetFlightlog(config))
+	app.Get("/templates/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.GetTemplateFlightlogs(config))
+	app.Get("/templates/:user_id/:template_id", auth.AuthenticationMiddleware(config, public_key), handlers.GetTemplateFlightlog(config))
 
 	app.Post("/flight-logs/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.CreateFlightlog(config))
 	app.Post("/flight-logs/:user_id/:flight_log_id/comments", auth.AuthenticationMiddleware(config, public_key), handlers.CreateFlightlogComment(config))
 	app.Post("/templates/:user_id", auth.AuthenticationMiddleware(config, public_key), handlers.CreateTemplateFlightlog(config))
 
 	app.Put("/flight-logs/:user_id/:flight_log_id", auth.AuthenticationMiddleware(config, public_key), handlers.UpdateFlightlog(config))
+	app.Put("/templates/:user_id/:template_id", auth.AuthenticationMiddleware(config, public_key), handlers.UpdateTemplateFlightlog(config))
+
+	app.Delete("/flight-logs/:user_id/:flight_log_id", auth.AuthenticationMiddleware(config, public_key), handlers.DeleteFlightlog(config))
+	app.Delete("/templates/:user_id/:template_id", auth.AuthenticationMiddleware(config, public_key), handlers.DeleteTemplateFlightlog(config))
 
 	// ==========================================
 	// Start Service

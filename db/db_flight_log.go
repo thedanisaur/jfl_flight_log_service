@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,71 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func DeleteFlightlog(txid uuid.UUID, user_id uuid.UUID, flight_log_id uuid.UUID) (uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(DeleteFlightlog))
+	database, err := GetInstance()
+	if err != nil {
+		log.Printf("Failed to connect to DB\n%s\n", err.Error())
+		return uuid.Nil, errors.New("failed to connect to DB")
+	}
+	transaction, err := database.BeginTx(context.Background(), nil)
+	if err != nil {
+		log.Printf("Failed to initiate transaction\n%s\n", err.Error())
+		return uuid.Nil, errors.New("failed to connect to DB")
+	}
+	defer transaction.Rollback()
+
+	// Delete flight log's comment records
+	comments_query := `DELETE FROM flight_log_comments WHERE flight_log_id = UUID_TO_BIN(?)`
+	comments_result, err := database.Exec(comments_query, flight_log_id)
+	if err != nil {
+		log.Printf("Failed to delete flight log comments: %s for user: %s\n%s\n", flight_log_id, user_id, err.Error())
+		return uuid.Nil, errors.New("failed to delete flight log comments")
+	}
+	_, err = comments_result.RowsAffected()
+	if err != nil {
+		return uuid.Nil, errors.New("failed to delete flight log comments")
+	}
+
+	// Delete flight log's aircrew records
+	aircrews_query := `DELETE FROM aircrews WHERE flight_log_id = UUID_TO_BIN(?)`
+	aircrews_result, err := database.Exec(aircrews_query, flight_log_id)
+	if err != nil {
+		log.Printf("Failed to delete aircrews: %s for user: %s\n%s\n", flight_log_id, user_id, err.Error())
+		return uuid.Nil, errors.New("failed to delete aircrews")
+	}
+	_, err = aircrews_result.RowsAffected()
+	if err != nil {
+		return uuid.Nil, errors.New("failed to delete aircrews")
+	}
+
+	// Delete flight log's mission records
+	missions_query := `DELETE FROM missions WHERE flight_log_id = UUID_TO_BIN(?)`
+	missions_result, err := database.Exec(missions_query, flight_log_id)
+	if err != nil {
+		log.Printf("Failed to delete missions: %s for user: %s\n%s\n", flight_log_id, user_id, err.Error())
+		return uuid.Nil, errors.New("failed to delete missions")
+	}
+	_, err = missions_result.RowsAffected()
+	if err != nil {
+		return uuid.Nil, errors.New("failed to delete missions")
+	}
+
+	// Delete flight log
+	flight_log_query := `DELETE FROM flight_logs WHERE id = UUID_TO_BIN(?)`
+	flight_log_result, err := database.Exec(flight_log_query, flight_log_id)
+	if err != nil {
+		log.Printf("Failed to delete flight log: %s for user: %s\n%s\n", flight_log_id, user_id, err.Error())
+		return uuid.Nil, errors.New("failed to delete flight log")
+	}
+	_, err = flight_log_result.RowsAffected()
+	if err != nil {
+		return uuid.Nil, errors.New("failed to delete flight log")
+	}
+
+	return flight_log_id, nil
+}
 
 func GetAirCrews(txid uuid.UUID, flight_log_id uuid.UUID) ([]types.FlightLogAircrewDTO, error) {
 	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(GetAirCrews))
@@ -292,7 +358,7 @@ func GetFlightlogsAll(txid uuid.UUID, user_id uuid.UUID, where_clause string, wh
 			, flight_logs.remarks
 		FROM flight_logs
 	`
-	where_clause = strings.ReplaceAll(where_clause, "?", "UUID_TO_BIN(?)")
+	// where_clause = strings.ReplaceAll(where_clause, "?", "UUID_TO_BIN(?)")
 	flight_log_query_str := strings.Join([]string{flight_log_query, "WHERE", where_clause}, " ")
 
 	/* TODO [drd] remove this logging */
@@ -739,9 +805,81 @@ func InsertMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID,
 	return ids, nil
 }
 
-func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
-	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(InsertFlightLog))
+func UpdateAircrews(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(UpdateAircrews))
 	err_string := fmt.Sprintf("database error: %s\n", txid.String())
+
+	database, err := GetInstance()
+	if err != nil {
+		log.Printf("failed to connect to database\n%s\n", err.Error())
+		return nil, errors.New(err_string)
+	}
+
+	ids := []uuid.UUID{}
+	for _, aircrew := range flight_log.Aircrew {
+		query := `
+			UPDATE aircrews
+			SET
+				flight_log_id = UUID_TO_BIN(?)
+				, user_id = UUID_TO_BIN(?)
+				, flying_origin = ?
+				, flight_auth_code = ?
+				, time_primary = ?
+				, time_secondary = ?
+				, time_instructor = ?
+				, time_evaluator = ?
+				, time_other = ?
+				, total_aircrew_duration_decimal = ?
+				, total_aircrew_sorties = ?
+				, cond_night_time = ?
+				, cond_instrument_time = ?
+				, cond_sim_instrument_time = ?
+				, cond_nvg_time = ?
+				, cond_combat_time = ?
+				, cond_combat_sortie = ?
+				, cond_combat_support_time = ?
+				, cond_combat_support_sortie = ?
+				, aircrew_role_type = ?
+			WHERE id = UUID_TO_BIN(?)
+		`
+		_, err := database.Exec(
+			query,
+			flight_log.ID,
+			aircrew.UserID,
+			aircrew.FlyingOrigin,
+			aircrew.FlightAuthCode,
+			aircrew.TimePrimary,
+			aircrew.TimeSecondary,
+			aircrew.TimeInstructor,
+			aircrew.TimeEvaluator,
+			aircrew.TimeOther,
+			aircrew.TotalAircrewDurationDecimal,
+			aircrew.TotalAircrewSorties,
+			aircrew.CondNightTime,
+			aircrew.CondInstrumentTime,
+			aircrew.CondSimInstrumentTime,
+			aircrew.CondNvgTime,
+			aircrew.CondCombatTime,
+			aircrew.CondCombatSortie,
+			aircrew.CondCombatSupportTime,
+			aircrew.CondCombatSupportSortie,
+			aircrew.AircrewRoleType,
+			// WHERE clause
+			aircrew.ID,
+		)
+		if err != nil {
+			log.Printf("failed aircrew update\n%s\n", err.Error())
+			return nil, errors.New(err_string)
+		}
+		ids = append(ids, aircrew.ID)
+	}
+	return ids, nil
+}
+
+func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(UpdateFlightLog))
+	err_string := fmt.Sprintf("database error: %s\n", txid.String())
+
 	database, err := GetInstance()
 	if err != nil {
 		log.Printf("failed to connect to database\n%s\n", err.Error())
@@ -750,7 +888,7 @@ func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, 
 	query := `
 		UPDATE flight_logs
 		SET
-			, mds = ?
+			mds = ?
 			, flight_log_date = ?
 			, serial_number = ?
 			, unit_charged = ?
@@ -760,20 +898,17 @@ func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, 
 			, is_training_flight = ?
 			, is_training_only = ?
 			, total_flight_decimal_time = ?
-			, scheduler_signature_id = ?
-			, sarm_signature_id = ?
-			, instructor_signature_id = ?
-			, student_signature_id = ?
-			, training_officer_signature_id = ?
+			, scheduler_signature_id = UUID_TO_BIN(?)
+			, sarm_signature_id = UUID_TO_BIN(?)
+			, instructor_signature_id = UUID_TO_BIN(?)
+			, student_signature_id = UUID_TO_BIN(?)
+			, training_officer_signature_id = UUID_TO_BIN(?)
 			, type = ?
 			, remarks = ?
-		WHERE id = ?
-		AND user_id = ?
+		WHERE id = UUID_TO_BIN(?)
 	`
-	id := uuid.New()
 	_, err = database.Exec(
 		query,
-		// Update Values
 		flight_log.MDS,
 		flight_log.FlightLogDate,
 		flight_log.SerialNumber,
@@ -791,13 +926,69 @@ func UpdateFlightLog(txid uuid.UUID, flight_log types.FlightLogDTO) (uuid.UUID, 
 		flight_log.TrainingOfficerSignatureID,
 		flight_log.Type,
 		flight_log.Remarks,
-		// WHERE
-		id,
-		flight_log.UserID,
+		// WHERE clause
+		flight_log.ID,
 	)
 	if err != nil {
 		log.Printf("failed flight log update\n%s\n", err.Error())
 		return uuid.Nil, errors.New(err_string)
 	}
-	return id, nil
+	return flight_log.ID, nil
+}
+
+func UpdateMissions(txid uuid.UUID, flight_log types.FlightLogDTO) ([]uuid.UUID, error) {
+	log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(UpdateMissions))
+	err_string := fmt.Sprintf("database error: %s\n", txid.String())
+
+	database, err := GetInstance()
+	if err != nil {
+		log.Printf("failed to connect to database\n%s\n", err.Error())
+		return nil, errors.New(err_string)
+	}
+
+	ids := []uuid.UUID{}
+	for _, mission := range flight_log.Missions {
+		query := `
+			UPDATE missions
+			SET
+				flight_log_id = UUID_TO_BIN(?)
+				, mission_number = ?
+				, mission_symbol = ?
+				, mission_from = ?
+				, mission_to = ?
+				, takeoff_time = ?
+				, land_time = ?
+				, total_time_decimal = ?
+				, total_time_display = ?
+				, touch_and_gos = ?
+				, full_stops = ?
+				, total_landings = ?
+				, sorties = ?
+			WHERE id = UUID_TO_BIN(?)
+		`
+		_, err := database.Exec(
+			query,
+			flight_log.ID,
+			mission.MissionNumber,
+			mission.MissionSymbol,
+			mission.MissionFrom,
+			mission.MissionTo,
+			mission.TakeoffTime,
+			mission.LandTime,
+			mission.TotalTimeDecimal,
+			mission.TotalTimeDisplay,
+			mission.TouchAndGos,
+			mission.FullStops,
+			mission.TotalLandings,
+			mission.Sorties,
+			// WHERE clause
+			mission.ID,
+		)
+		if err != nil {
+			log.Printf("failed mission update\n%s\n", err.Error())
+			return nil, errors.New(err_string)
+		}
+		ids = append(ids, mission.ID)
+	}
+	return ids, nil
 }

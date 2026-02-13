@@ -1,6 +1,6 @@
 [Unit]
-Description=User Service
-ConditionPathExists=/opt/user_service
+Description=Flight Log Service
+ConditionPathExists=/opt/flight_log_service
 After=network.target
 StartLimitIntervalSec=60
  
@@ -13,14 +13,14 @@ LimitNOFILE=1024
 Restart=on-failure
 RestartSec=10
 
-WorkingDirectory=/opt/user_service
-ExecStart=/opt/user_service/main
+WorkingDirectory=/opt/flight_log_service
+ExecStart=/opt/flight_log_service/main
 
 # make sure log directory exists and owned by user
 PermissionsStartOnly=true
-ExecStartPre=/bin/mkdir -p /var/log/user_service
-ExecStartPre=/bin/chown ec2-user /var/log/user_service
-ExecStartPre=/bin/chmod 755 /var/log/user_service
+ExecStartPre=/bin/mkdir -p /var/log/flight_log_service
+ExecStartPre=/bin/chown ec2-user /var/log/flight_log_service
+ExecStartPre=/bin/chmod 755 /var/log/flight_log_service
 SyslogIdentifier=ec2-user
  
 [Install]

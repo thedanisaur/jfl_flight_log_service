@@ -1,5 +1,8 @@
 # JFL Flight Log Service
 
+Domain → Actual flight execution
+* What actually happened
+
 Insert Flight Log
 ```
 USER_ID=5a1bc8b9-f502-11f0-a8a7-74563c2abceb

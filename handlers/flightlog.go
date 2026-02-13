@@ -55,6 +55,33 @@ func CreateFlightlog(config types.Config) fiber.Handler {
 	}
 }
 
+func DeleteFlightlog(config types.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		txid := c.Locals("transaction_id").(uuid.UUID)
+		log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(DeleteFlightlog))
+
+		user_id, err := uuid.Parse(c.Params("user_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
+		}
+		flight_log_id, err := uuid.Parse(c.Params("flight_log_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid flight log")
+		}
+
+		_, err = db.DeleteFlightlog(txid, user_id, flight_log_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		response := fiber.Map{
+			"txid":          txid.String(),
+			"flight_log_id": flight_log_id,
+		}
+		return c.Status(fiber.StatusOK).JSON(response)
+	}
+}
+
 func GetFlightlog(config types.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		txid := c.Locals("transaction_id").(uuid.UUID)
@@ -210,17 +237,27 @@ func UpdateFlightlog(config types.Config) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).SendString(fmt.Sprintf("Failed to parse flight log data: %s\n", txid.String()))
 		}
 		// TODO [drd] validate that this action is allowed.
-		/* Get the requesting user's id */
-		// request_user_id := c.Locals("user_id").(uuid.UUID)
+		/* Get the requesting user */
+		// request_user := c.Locals("user_claims").(types.UserClaims)
 
 		/* Now update the flight log */
-		flight_log.ID, err = db.UpdateFlightLog(txid, flight_log)
+		flight_log_id, err := db.UpdateFlightLog(txid, flight_log)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+		mission_ids, err := db.UpdateMissions(txid, flight_log)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+		aircrew_ids, err := db.UpdateAircrews(txid, flight_log)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 		response := fiber.Map{
 			"txid":          txid.String(),
-			"flight_log_id": flight_log.ID.String(),
+			"flight_log_id": flight_log_id,
+			"mission_ids":   mission_ids,
+			"aircrew_ids":   aircrew_ids,
 		}
 		return c.Status(fiber.StatusOK).JSON(response)
 	}

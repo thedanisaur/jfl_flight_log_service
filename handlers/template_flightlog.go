@@ -17,8 +17,8 @@ func CreateTemplateFlightlog(config types.Config) fiber.Handler {
 		txid := c.Locals("transaction_id").(uuid.UUID)
 		log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(CreateTemplateFlightlog))
 
-		var flight_log types.FlightLogDTO
-		err := c.BodyParser(&flight_log)
+		var template_flight_log types.TemplateFlightLogDTO
+		err := c.BodyParser(&template_flight_log)
 		if err != nil {
 			log.Printf("Failed to parse template flight log data\n%s\n", err.Error())
 			return c.Status(fiber.StatusBadRequest).SendString(fmt.Sprintf("Failed to parse template flight log data: %s\n", txid.String()))
@@ -27,25 +27,52 @@ func CreateTemplateFlightlog(config types.Config) fiber.Handler {
 		request_user := c.Locals("user_claims").(types.UserClaims)
 
 		/* Now start inserting the flight log */
-		flight_log.ID, err = db.InsertTemplateFlightLog(txid, request_user.UserID, flight_log)
+		template_flight_log.ID, err = db.InsertTemplateFlightLog(txid, request_user.UserID, template_flight_log)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
-		mission_ids, err := db.InsertTemplateMissions(txid, flight_log)
+		mission_ids, err := db.InsertTemplateMissions(txid, template_flight_log)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
-		aircrew_ids, err := db.InsertTemplateAircrews(txid, flight_log)
+		aircrew_ids, err := db.InsertTemplateAircrews(txid, template_flight_log)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 		response := fiber.Map{
-			"txid":          txid.String(),
-			"flight_log_id": flight_log.ID.String(),
-			"mission_ids":   mission_ids,
-			"aircrew_ids":   aircrew_ids,
+			"txid":                   txid.String(),
+			"template_flight_log_id": template_flight_log.ID.String(),
+			"template_mission_ids":   mission_ids,
+			"template_aircrew_ids":   aircrew_ids,
 		}
 		return c.Status(fiber.StatusOK).JSON(response)
+	}
+}
+
+func DeleteTemplateFlightlog(config types.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		txid := c.Locals("transaction_id").(uuid.UUID)
+		log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(DeleteTemplateFlightlog))
+
+		user_id, err := uuid.Parse(c.Params("user_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
+		}
+		template_id, err := uuid.Parse(c.Params("template_id"))
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid template flight log")
+		}
+
+		flight_log, err := db.DeleteTemplateFlightlog(txid, user_id, template_id)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+
+		// response := fiber.Map{
+		// 	"txid": txid.String(),
+		// }
+
+		return c.Status(fiber.StatusOK).JSON(flight_log)
 	}
 }
 
@@ -58,27 +85,22 @@ func GetTemplateFlightlog(config types.Config) fiber.Handler {
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
 		}
-		flight_log_id, err := uuid.Parse(c.Params("flight_log_id"))
+		template_id, err := uuid.Parse(c.Params("template_id"))
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid flight log")
 		}
 
-		flight_log, err := db.GetFlightlog(txid, user_id, flight_log_id)
+		flight_log, err := db.GetTemplateFlightlog(txid, user_id, template_id)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 
-		flight_log.Missions, err = db.GetMissions(txid, flight_log_id)
+		flight_log.Missions, err = db.GetTemplateMissions(txid, template_id)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 
-		flight_log.Aircrew, err = db.GetAirCrews(txid, flight_log_id)
-		if err != nil {
-			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
-		}
-
-		flight_log.Comments, err = db.GetFlightLogComments(txid, flight_log_id)
+		flight_log.Aircrew, err = db.GetTemplateAirCrews(txid, template_id)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
@@ -101,33 +123,28 @@ func GetTemplateFlightlogs(config types.Config) fiber.Handler {
 			return c.Status(fiber.StatusServiceUnavailable).SendString("invalid user")
 		}
 
-		flight_logs, err := db.GetFlightlogs(txid, user_id)
+		template_flight_logs, err := db.GetTemplateFlightlogs(txid, user_id)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 
-		for index := range flight_logs {
-			flight_logs[index].Missions, err = db.GetMissions(txid, flight_logs[index].ID)
-			if err != nil {
-				return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
-			}
+		// for index := range template_flight_logs {
+		// 	template_flight_logs[index].Missions, err = db.GetTemplateMissions(txid, template_flight_logs[index].ID)
+		// 	if err != nil {
+		// 		return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		// 	}
 
-			flight_logs[index].Aircrew, err = db.GetAirCrews(txid, flight_logs[index].ID)
-			if err != nil {
-				return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
-			}
-
-			flight_logs[index].Comments, err = db.GetFlightLogComments(txid, flight_logs[index].ID)
-			if err != nil {
-				return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
-			}
-		}
+		// 	template_flight_logs[index].Aircrew, err = db.GetTemplateAirCrews(txid, template_flight_logs[index].ID)
+		// 	if err != nil {
+		// 		return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		// 	}
+		// }
 
 		// response := fiber.Map{
 		// 	"txid": txid.String(),
 		// }
 
-		return c.Status(fiber.StatusOK).JSON(flight_logs)
+		return c.Status(fiber.StatusOK).JSON(template_flight_logs)
 	}
 }
 
@@ -136,24 +153,34 @@ func UpdateTemplateFlightlog(config types.Config) fiber.Handler {
 		txid := c.Locals("transaction_id").(uuid.UUID)
 		log.Printf("%s | %s\n", txid.String(), util.GetFunctionName(UpdateTemplateFlightlog))
 
-		var flight_log types.FlightLogDTO
-		err := c.BodyParser(&flight_log)
+		var template_flight_log types.TemplateFlightLogDTO
+		err := c.BodyParser(&template_flight_log)
 		if err != nil {
-			log.Printf("Failed to parse flight log data\n%s\n", err.Error())
-			return c.Status(fiber.StatusBadRequest).SendString(fmt.Sprintf("Failed to parse flight log data: %s\n", txid.String()))
+			log.Printf("Failed to parse template flight log data\n%s\n", err.Error())
+			return c.Status(fiber.StatusBadRequest).SendString(fmt.Sprintf("Failed to parse template flight log data: %s\n", txid.String()))
 		}
 		// TODO [drd] validate that this action is allowed.
-		/* Get the requesting user's id */
-		// request_user_id := c.Locals("user_id").(uuid.UUID)
+		/* Get the requesting user */
+		// request_user := c.Locals("user_claims").(types.UserClaims)
 
 		/* Now update the flight log */
-		flight_log.ID, err = db.UpdateFlightLog(txid, flight_log)
+		template_id, err := db.UpdateTemplateFlightLog(txid, template_flight_log)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+		mission_ids, err := db.UpdateTemplateMissions(txid, template_flight_log)
+		if err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
+		}
+		aircrew_ids, err := db.UpdateTemplateAircrews(txid, template_flight_log)
 		if err != nil {
 			return c.Status(fiber.StatusServiceUnavailable).SendString(err.Error())
 		}
 		response := fiber.Map{
-			"txid":          txid.String(),
-			"flight_log_id": flight_log.ID.String(),
+			"txid":                   txid.String(),
+			"template_flight_log_id": template_id,
+			"template_mission_ids":   mission_ids,
+			"template_aircrew_ids":   aircrew_ids,
 		}
 		return c.Status(fiber.StatusOK).JSON(response)
 	}
